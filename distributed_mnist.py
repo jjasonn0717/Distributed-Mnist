@@ -20,8 +20,8 @@ A simple softmax model with one hidden layer is defined. The parameters
 ops are defined on a worker node. The TF sessions also run on the worker
 node.
 Multiple invocations of this script can be done in parallel, with different
-values for --worker_index. There should be exactly one invocation with
---worker_index, which will create a master session that carries out variable
+values for --task_index. There should be exactly one invocation with
+--task_index, which will create a master session that carries out variable
 initialization. The other, non-master, sessions will wait for the master
 session to finish the initialization before proceeding to the training stage.
 The coordination between the multiple worker invocations occurs due to
@@ -71,8 +71,8 @@ flags.DEFINE_string("worker_hosts", "10.81.103.122:2222, 10.81.103.122:3333",
                     "List of hostname:port for worker jobs."
                     "This string should be the same on every host!!")
 
-flags.DEFINE_integer("worker_index", None,
-                     "Ps task index or worker task index, should be >= 0. worker_index=0 is "
+flags.DEFINE_integer("task_index", None,
+                     "Ps task index or worker task index, should be >= 0. task_index=0 is "
                      "the master worker task that performs the variable "
                      "initialization ")
 flags.DEFINE_integer("num_workers", 2,
@@ -83,8 +83,6 @@ flags.DEFINE_integer("replicas_to_aggregate", None,
                      "Number of replicas to aggregate before parameter update"
                      "is applied (For sync_replicas mode only; default: "
                      "num_workers)")
-flags.DEFINE_integer("hidden_units", 1024,
-                     "Number of units in the hidden layer of the NN")
 flags.DEFINE_integer("train_steps", 150,
                      "Number of (global) training steps to perform")
 flags.DEFINE_integer("batch_size", 100, "Training batch size")
@@ -130,9 +128,9 @@ def main(unused_argv):
 
 
     # Sanity check on the number of workers and the worker index #
-    if FLAGS.worker_index >= FLAGS.num_workers:
+    if FLAGS.task_index >= FLAGS.num_workers:
         raise ValueError("Worker index %d exceeds number of workers %d " % 
-                         (FLAGS.worker_index, FLAGS.num_workers))
+                         (FLAGS.task_index, FLAGS.num_workers))
 
     # Sanity check on the number of parameter servers #
     if FLAGS.num_parameter_servers <= 0:
@@ -141,16 +139,16 @@ def main(unused_argv):
 
     ps_hosts = re.findall(r'[\w\.:]+', FLAGS.ps_hosts)
     worker_hosts = re.findall(r'[\w\.:]+', FLAGS.worker_hosts)
-    server = tf.train.Server({"ps":ps_hosts,"worker":worker_hosts}, job_name=FLAGS.job_name, task_index=FLAGS.worker_index)
+    server = tf.train.Server({"ps":ps_hosts,"worker":worker_hosts}, job_name=FLAGS.job_name, task_index=FLAGS.task_index)
 
-    print("Worker GRPC URL: %s" % server.target)
-    print("Worker index = %d" % FLAGS.worker_index)
+    print("GRPC URL: %s" % server.target)
+    print("Task index = %d" % FLAGS.task_index)
     print("Number of workers = %d" % FLAGS.num_workers)
 
     if FLAGS.job_name == "ps":
         server.join()
     else:
-        is_chief = (FLAGS.worker_index == 0)
+        is_chief = (FLAGS.task_index == 0)
 
     if FLAGS.sync_replicas:
         if FLAGS.replicas_to_aggregate is None:
@@ -243,14 +241,14 @@ def main(unused_argv):
 
         sess_config = tf.ConfigProto(allow_soft_placement=True,
                                      log_device_placement=False,
-                                     device_filters=["/job:ps", "/job:worker/task:%d" % FLAGS.worker_index])
+                                     device_filters=["/job:ps", "/job:worker/task:%d" % FLAGS.task_index])
 
-        # The chief worker (worker_index==0) session will prepare the session,   #
+        # The chief worker (task_index==0) session will prepare the session,   #
         # while the remaining workers will wait for the preparation to complete. #
         if is_chief:
-            print("Worker %d: Initializing session..." % FLAGS.worker_index)
+            print("Worker %d: Initializing session..." % FLAGS.task_index)
         else:
-            print("Worker %d: Waiting for session to be initialized..." % FLAGS.worker_index)
+            print("Worker %d: Waiting for session to be initialized..." % FLAGS.task_index)
 
         sess = sv.prepare_or_wait_for_session(server.target,
                                               config=sess_config)
@@ -261,7 +259,7 @@ def main(unused_argv):
         tf.gfile.MakeDirs('./summary/train')
 
         train_writer = tf.train.SummaryWriter('./summary/train', sess.graph)
-        print("Worker %d: Session initialization complete." % FLAGS.worker_index)
+        print("Worker %d: Session initialization complete." % FLAGS.task_index)
 
         '''if FLAGS.sync_replicas and is_chief:
             # Chief worker will start the chief queue runner and call the init op #
@@ -287,7 +285,7 @@ def main(unused_argv):
             now = time.time()
             if(local_step % 2 == 0):
                 print("%s: Worker %d: training step %d done (global step: %d), loss: %.6f" %
-                   (time.ctime(now), FLAGS.worker_index, local_step, step+1, loss))
+                   (time.ctime(now), FLAGS.task_index, local_step, step+1, loss))
                 train_writer.add_run_metadata(run_metadata, 'step'+str(step+1))
                 train_writer.add_summary(summary, step+1)
 
