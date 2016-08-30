@@ -53,7 +53,6 @@ flags.DEFINE_string("data_dir", "./MNIST_data",
 flags.DEFINE_boolean("download_only", False,
                      "Only perform downloading of data; Do not proceed to "
                      "session preparation, model definition or training")
-#air
 flags.DEFINE_string("job_name", "","One of 'ps' or 'worker'")
 
 
@@ -72,9 +71,6 @@ flags.DEFINE_string("worker_hosts", "10.81.103.122:2222, 10.81.103.122:3333",
                     "List of hostname:port for worker jobs."
                     "This string should be the same on every host!!")
 
-
-#air
-
 flags.DEFINE_integer("worker_index", None,
                      "Ps task index or worker task index, should be >= 0. worker_index=0 is "
                      "the master worker task that performs the variable "
@@ -87,17 +83,12 @@ flags.DEFINE_integer("replicas_to_aggregate", None,
                      "Number of replicas to aggregate before parameter update"
                      "is applied (For sync_replicas mode only; default: "
                      "num_workers)")
-#flags.DEFINE_integer("grpc_port", 5555,
-#                     "TensorFlow GRPC port")
 flags.DEFINE_integer("hidden_units", 1024,
                      "Number of units in the hidden layer of the NN")
 flags.DEFINE_integer("train_steps", 150,
                      "Number of (global) training steps to perform")
 flags.DEFINE_integer("batch_size", 100, "Training batch size")
 flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
-flags.DEFINE_string("worker_grpc_url", None,
-                    "Worker GRPC URL (e.g., grpc://1.2.3.4:2222, or "
-                    "grpc://tf-worker0:2222)")
 flags.DEFINE_boolean("sync_replicas", False,
                      "Use the sync_replicas (synchronized replicas) mode, "
                      "wherein the parameter updates from workers are aggregated "
@@ -109,7 +100,8 @@ IMAGE_PIXELS = 28
 
 
 def get_device_setter(num_parameter_servers, num_workers):
-    """Get a device setter given number of servers in the cluster.
+    """ 
+    Get a device setter given number of servers in the cluster.
     Given the numbers of parameter servers and workers, construct a device
     setter object using ClusterSpec.
     Args:
@@ -119,15 +111,15 @@ def get_device_setter(num_parameter_servers, num_workers):
         Device setter object.
     """
 
-    ps_hosts = re.findall(r'[\w\.:]+', FLAGS.ps_hosts)
-    worker_hosts = re.findall(r'[\w\.:]+', FLAGS.worker_hosts)
+    ps_hosts = re.findall(r'[\w\.:]+', FLAGS.ps_hosts) # split address
+    worker_hosts = re.findall(r'[\w\.:]+', FLAGS.worker_hosts) # split address
 
     assert num_parameter_servers == len(ps_hosts)
     assert num_workers == len(worker_hosts)
 
     cluster_spec = tf.train.ClusterSpec({"ps":ps_hosts,"worker":worker_hosts})
 
-    # Get device setter from the cluster spec
+    # Get device setter from the cluster spec #
     return tf.train.replica_device_setter(cluster=cluster_spec)
 
 
@@ -137,19 +129,19 @@ def main(unused_argv):
         sys.exit(0)
 
 
-    # Sanity check on the number of workers and the worker index
-    # if FLAGS.worker_index >= FLAGS.num_workers:
-    # raise ValueError("Worker index %d exceeds number of workers %d " %
-    #                   (FLAGS.worker_index, FLAGS.num_workers))
+    # Sanity check on the number of workers and the worker index #
+    if FLAGS.worker_index >= FLAGS.num_workers:
+        raise ValueError("Worker index %d exceeds number of workers %d " % 
+                         (FLAGS.worker_index, FLAGS.num_workers))
 
-    # Sanity check on the number of parameter servers
+    # Sanity check on the number of parameter servers #
     if FLAGS.num_parameter_servers <= 0:
-        raise ValueError("Invalid num_parameter_servers value: %d" %
-                       FLAGS.num_parameter_servers)
-    # air
+        raise ValueError("Invalid num_parameter_servers value: %d" % 
+                         FLAGS.num_parameter_servers)
+
     ps_hosts = re.findall(r'[\w\.:]+', FLAGS.ps_hosts)
     worker_hosts = re.findall(r'[\w\.:]+', FLAGS.worker_hosts)
-    server = tf.train.Server({"ps":ps_hosts,"worker":worker_hosts}, job_name = FLAGS.job_name, task_index = FLAGS.worker_index)
+    server = tf.train.Server({"ps":ps_hosts,"worker":worker_hosts}, job_name=FLAGS.job_name, task_index=FLAGS.worker_index)
 
     print("Worker GRPC URL: %s" % server.target)
     print("Worker index = %d" % FLAGS.worker_index)
@@ -166,49 +158,50 @@ def main(unused_argv):
         else:
             replicas_to_aggregate = FLAGS.replicas_to_aggregate
 
-    # Construct device setter object
+    # Construct device setter object #
     device_setter = get_device_setter(FLAGS.num_parameter_servers,
                                       FLAGS.num_workers)
 
-    # The device setter will automatically place Variables ops on separate
-    # parameter servers (ps). The non-Variable ops will be placed on the workers.
+    # The device setter will automatically place Variables ops on separate        #
+    # parameter servers (ps). The non-Variable ops will be placed on the workers. #
     with tf.device(device_setter):
         global_step = tf.Variable(0, name="global_step", trainable=False)
         with tf.name_scope('input'):
+            # input #
             x = tf.placeholder(tf.float32, shape=[None, 784], name="x-input")
-            # target 10 output classes
+            x_image = tf.reshape(x, [-1,28,28,1])
+            # label, 10 output classes #
             y_ = tf.placeholder(tf.float32, shape=[None, 10], name="y-input")
             prob = tf.placeholder(tf.float32, name='keep_prob')
-            x_image = tf.reshape(x, [-1,28,28,1])
 
         stack1_conv1 = layers.convolution2d(x_image,
-                                                64,
-                                                [3,3],
-                                                weights_regularizer=layers.l2_regularizer(0.1),
-                                                biases_regularizer=layers.l2_regularizer(0.1),
-                                                scope='stack1_Conv1')
+                                            64,
+                                            [3,3],
+                                            weights_regularizer=layers.l2_regularizer(0.1),
+                                            biases_regularizer=layers.l2_regularizer(0.1),
+                                            scope='stack1_Conv1')
         stack1_conv2 = layers.convolution2d(stack1_conv1,
-                                                64,
-                                                [3,3],
-                                                weights_regularizer=layers.l2_regularizer(0.1),
-                                                biases_regularizer=layers.l2_regularizer(0.1),
-                                                scope='stack1_Conv2')
+                                            64,
+                                            [3,3],
+                                            weights_regularizer=layers.l2_regularizer(0.1),
+                                            biases_regularizer=layers.l2_regularizer(0.1),
+                                            scope='stack1_Conv2')
         stack1_pool = layers.max_pool2d(stack1_conv2,
-                                            [2,2],
-                                            padding='SAME',
-                                            scope='stack1_Pool')
+                                        [2,2],
+                                        padding='SAME',
+                                        scope='stack1_Pool')
         stack3_pool_flat = layers.flatten(stack1_pool, scope='stack3_pool_flat')
         fcl1 = layers.fully_connected(stack3_pool_flat, 
-                                          512, 
-                                          weights_regularizer=layers.l2_regularizer(0.1), 
-                                          biases_regularizer=layers.l2_regularizer(0.1), 
-                                          scope='FCL1')
+                                      512, 
+                                      weights_regularizer=layers.l2_regularizer(0.1), 
+                                      biases_regularizer=layers.l2_regularizer(0.1), 
+                                      scope='FCL1')
         fcl1_d = layers.dropout(fcl1, keep_prob=prob, scope='dropout1')
         fcl2 = layers.fully_connected(fcl1_d, 
-                                          128, 
-                                          weights_regularizer=layers.l2_regularizer(0.1), 
-                                          biases_regularizer=layers.l2_regularizer(0.1), 
-                                          scope='FCL2')
+                                      128, 
+                                      weights_regularizer=layers.l2_regularizer(0.1), 
+                                      biases_regularizer=layers.l2_regularizer(0.1), 
+                                      scope='FCL2')
         fcl2_d = layers.dropout(fcl2, keep_prob=prob, scope='dropout2')
         y, cross_entropy = skflow.models.logistic_regression(fcl2_d, y_, init_stddev=0.01)
         tf.scalar_summary('cross_entropy', cross_entropy)
@@ -220,20 +213,20 @@ def main(unused_argv):
             learning_rate = tf.train.exponential_decay(start_l_rate, global_step, decay_step, decay_rate, staircase=False)
             grad_op = tf.train.RMSPropOptimizer(learning_rate=learning_rate)
             '''rep_op = tf.train.SyncReplicasOptimizer(grad_op, 
-                                                        replicas_to_aggregate=len(workers),
-                                                        replica_id=FLAGS.task_index, 
-                                                        total_num_replicas=len(workers))'''
+                                                    replicas_to_aggregate=len(workers),
+                                                    replica_id=FLAGS.task_index, 
+                                                    total_num_replicas=len(workers)) # also belong to the same class as other optimizers'''
             train_op = tf.contrib.layers.optimize_loss(loss=cross_entropy, 
-                                                           global_step=global_step, 
-                                                           learning_rate=0.001, 
-                                                           optimizer=grad_op, 
-                                                           clip_gradients=1)
+                                                       global_step=global_step, 
+                                                       learning_rate=0.001, 
+                                                       optimizer=grad_op, 
+                                                       clip_gradients=1)
             tf.scalar_summary('learning_rate', learning_rate)
 
         '''if FLAGS.sync_replicas and is_chief:
-          # Initial token and chief queue runners required by the sync_replicas mode
-          chief_queue_runner = opt.get_chief_queue_runner()
-          init_tokens_op = opt.get_init_tokens_op()'''
+            # Initial token and chief queue runners required by the sync_replicas mode #
+            chief_queue_runner = opt.get_chief_queue_runner()
+            init_tokens_op = opt.get_init_tokens_op()'''
 
         with tf.name_scope('accuracy'):
             correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
@@ -252,8 +245,8 @@ def main(unused_argv):
                                      log_device_placement=False,
                                      device_filters=["/job:ps", "/job:worker/task:%d" % FLAGS.worker_index])
 
-        # The chief worker (worker_index==0) session will prepare the session,
-        # while the remaining workers will wait for the preparation to complete.
+        # The chief worker (worker_index==0) session will prepare the session,   #
+        # while the remaining workers will wait for the preparation to complete. #
         if is_chief:
             print("Worker %d: Initializing session..." % FLAGS.worker_index)
         else:
@@ -268,22 +261,21 @@ def main(unused_argv):
         tf.gfile.MakeDirs('./summary/train')
 
         train_writer = tf.train.SummaryWriter('./summary/train', sess.graph)
-        #test_writer = tf.train.SummaryWriter('./summary/test', sess.graph)
         print("Worker %d: Session initialization complete." % FLAGS.worker_index)
 
         '''if FLAGS.sync_replicas and is_chief:
-          # Chief worker will start the chief queue runner and call the init op
-          print("Starting chief queue runner and running init_tokens_op")
-          sv.start_queue_runners(sess, [chief_queue_runner])
-          sess.run(init_tokens_op)'''
+            # Chief worker will start the chief queue runner and call the init op #
+            print("Starting chief queue runner and running init_tokens_op")
+            sv.start_queue_runners(sess, [chief_queue_runner])
+            sess.run(init_tokens_op)'''
 
-        # Perform training
+        ## Perform training ##
         time_begin = time.time()
         print("Training begins @ %s" % time.ctime(time_begin))
 
         local_step = 1
         while True:
-            # Training feed
+            # Training feed #
             batch_xs, batch_ys = mnist.train.next_batch(FLAGS.batch_size)
             train_feed = {x: batch_xs,
                           y_: batch_ys,
@@ -309,10 +301,10 @@ def main(unused_argv):
         print("Training elapsed time: %f s" % training_time)
 
 
+        # memory issue occured, split testing data into batch #
         acc_acu = 0.
         for i in xrange(int(10000/1000)):
             test_x, test_y = mnist.test.next_batch(1000)
-            #print(test_x.shape)
             acc_batch = sess.run(accuracy, feed_dict={x: test_x, y_: test_y, prob: 1.0})
             print(acc_batch)
             acc_acu += acc_batch
